@@ -8,10 +8,10 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     camera_model = LaunchConfiguration('camera_model', default='OAK-D-LITE')
-    colorResolution = LaunchConfiguration('colorResolution', default="720p")
-    colorFramerate = LaunchConfiguration('colorFramerate',  default=15)
+    colorResolution = LaunchConfiguration('colorResolution', default="480p")
+    colorFramerate = LaunchConfiguration('colorFramerate',  default=10)
     monoResolution = LaunchConfiguration('monoResolution',  default="480p")
-    monoFramerate = LaunchConfiguration('monoFramerate',   default=15)
+    monoFramerate = LaunchConfiguration('monoFramerate',   default=10)
 
     declare_camera_model_cmd = DeclareLaunchArgument(
         'camera_model',
