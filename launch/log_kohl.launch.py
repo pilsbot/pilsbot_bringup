@@ -4,7 +4,7 @@ import launch
 def generate_launch_description():
     return launch.LaunchDescription([
         launch.actions.ExecuteProcess(
-            cmd=['ros2', 'bag', 'record', 
+            cmd=['ros2', 'bag', '-b 34359738368', 'record', 
                  '/camera_info',
                  '/color/video/image',
                  'color/video/camera_info',
