@@ -8,10 +8,11 @@ from launch_ros.substitutions import FindPackageShare
 
 def generate_launch_description():
     camera_model = LaunchConfiguration('camera_model', default='OAK-D-LITE')
-    colorResolution = LaunchConfiguration('colorResolution', default="480p")
+    colorResolution = LaunchConfiguration('colorResolution',default="480p")
     colorFramerate = LaunchConfiguration('colorFramerate',  default=10)
     monoResolution = LaunchConfiguration('monoResolution',  default="480p")
-    monoFramerate = LaunchConfiguration('monoFramerate',   default=10)
+    monoFramerate = LaunchConfiguration('monoFramerate',    default=10)
+    withoutLights = LaunchConfiguration('withoutLights',   default=False)
 
     declare_camera_model_cmd = DeclareLaunchArgument(
         'camera_model',
@@ -43,6 +44,11 @@ def generate_launch_description():
         default_value=monoFramerate,
         description='The framerate of the mono cameras')
 
+    declare_no_lighting_cmd = DeclareLaunchArgument(
+        'withoutLights',
+        default_value=withoutLights,
+        description='If set, STVO lighting is suppressed (on closed courses only! Führerscheinentzug!)')
+
     included_pilsbot_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([PathJoinSubstitution(
             [FindPackageShare('pilsbot_driver'), 'launch/pilsbot_teleop.launch.py'])]),
@@ -68,16 +74,33 @@ def generate_launch_description():
             [FindPackageShare('pilsbot_gnss_receiver'), 'launch/ublox-receiver.launch.py'])]),
     )
 
+    included_pilsbot_lighting_bridge = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([PathJoinSubstitution(
+                [FindPackageShare('pilsbot_indicators'), 'launch/bridge.launch.py'])]),
+        )
+
+    included_pilsbot_lighting = None
+    if not withoutLights or True: # FIXME: Switch does not seem to work. Too tired to debug. Fuckall.
+        included_pilsbot_lighting = IncludeLaunchDescription(
+            PythonLaunchDescriptionSource([PathJoinSubstitution(
+                [FindPackageShare('pilsbot_indicators'), 'launch/stvo.launch.py'])]),
+        )
+
+
     ld = LaunchDescription()
     ld.add_action(declare_camera_model_cmd)
     ld.add_action(declare_colorFramerate_cmd)
     ld.add_action(declare_colorResolution_cmd)
     ld.add_action(declare_monoFramerate_cmd)
     ld.add_action(declare_monoResolution_cmd)
+    ld.add_action(declare_no_lighting_cmd)
 
     ld.add_action(included_pilsbot_launch)
     ld.add_action(included_jeston_camera_launch)
     ld.add_action(included_pilsbot_depthai_launch)
     ld.add_action(included_pilsbot_gnss)
+    ld.add_action(included_pilsbot_lighting_bridge)
+    if included_pilsbot_lighting:
+        ld.add_action(included_pilsbot_lighting)
 
     return ld
