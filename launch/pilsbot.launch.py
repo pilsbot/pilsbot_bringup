@@ -74,11 +74,6 @@ def generate_launch_description():
             [FindPackageShare('pilsbot_gnss_receiver'), 'launch/ublox-receiver.launch.py'])]),
     )
 
-    included_pilsbot_lighting_bridge = IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([PathJoinSubstitution(
-                [FindPackageShare('pilsbot_indicators'), 'launch/bridge.launch.py'])]),
-        )
-
     included_pilsbot_lighting = None
     if not withoutLights or True: # FIXME: Switch does not seem to work. Too tired to debug. Fuckall.
         included_pilsbot_lighting = IncludeLaunchDescription(
@@ -99,7 +94,6 @@ def generate_launch_description():
     ld.add_action(included_jeston_camera_launch)
     ld.add_action(included_pilsbot_depthai_launch)
     ld.add_action(included_pilsbot_gnss)
-    ld.add_action(included_pilsbot_lighting_bridge)
     if included_pilsbot_lighting:
         ld.add_action(included_pilsbot_lighting)
 
