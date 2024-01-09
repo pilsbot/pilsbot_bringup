@@ -12,7 +12,7 @@ def generate_launch_description():
     colorFramerate = LaunchConfiguration('colorFramerate',  default=10)
     monoResolution = LaunchConfiguration('monoResolution',  default="480p")
     monoFramerate = LaunchConfiguration('monoFramerate',    default=10)
-    withoutLights = LaunchConfiguration('withoutLights',   default=False)
+    withoutLights = LaunchConfiguration('withoutLights',   default=True)
 
     declare_camera_model_cmd = DeclareLaunchArgument(
         'camera_model',
@@ -75,7 +75,7 @@ def generate_launch_description():
     )
 
     included_pilsbot_lighting = None
-    if not withoutLights or True: # FIXME: Switch does not seem to work. Too tired to debug. Fuckall.
+    if not LaunchConfiguration('withoutLights'):
         included_pilsbot_lighting = IncludeLaunchDescription(
             PythonLaunchDescriptionSource([PathJoinSubstitution(
                 [FindPackageShare('pilsbot_indicators'), 'launch/stvo.launch.py'])]),
