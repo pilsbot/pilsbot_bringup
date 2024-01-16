@@ -1,10 +1,12 @@
 import launch
-
+import os
 
 def generate_launch_description():
     return launch.LaunchDescription([
         launch.actions.ExecuteProcess(
-            cmd=['ros2', 'bag', '-b 34359738368', 'record', 
+            cmd=['ros2', 'bag',
+                 #'-b 34359738368', # ros2 does not seem to support the split size anymore
+                 'record',
                  '/camera_info',
                  '/color/video/image',
                  'color/video/camera_info',
@@ -27,5 +29,6 @@ def generate_launch_description():
                  '/time_reference',
                  '/vel'],
             output='screen'
+            ,cwd=
         )
     ])
