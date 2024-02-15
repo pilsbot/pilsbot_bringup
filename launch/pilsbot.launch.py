@@ -12,7 +12,7 @@ def generate_launch_description():
     colorFramerate = LaunchConfiguration('colorFramerate',  default=10)
     monoResolution = LaunchConfiguration('monoResolution',  default="480p")
     monoFramerate = LaunchConfiguration('monoFramerate',    default=10)
-    withoutLights = LaunchConfiguration('withoutLights',   default=True)
+    withoutLights = LaunchConfiguration('withoutLights',   default=False)
 
     declare_camera_model_cmd = DeclareLaunchArgument(
         'camera_model',
