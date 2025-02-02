@@ -1,6 +1,7 @@
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
 from launch.actions import IncludeLaunchDescription
+from launch.conditions import IfCondition
 from launch.substitutions import LaunchConfiguration, PathJoinSubstitution
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch_ros.substitutions import FindPackageShare
@@ -12,7 +13,7 @@ def generate_launch_description():
     colorFramerate = LaunchConfiguration('colorFramerate',  default=10)
     monoResolution = LaunchConfiguration('monoResolution',  default="480p")
     monoFramerate = LaunchConfiguration('monoFramerate',    default=10)
-    withoutLights = LaunchConfiguration('withoutLights',   default=False)
+    withLights = LaunchConfiguration('withLights',   default=True)      # deactivate with withLights:=false
 
     declare_camera_model_cmd = DeclareLaunchArgument(
         'camera_model',
@@ -44,9 +45,9 @@ def generate_launch_description():
         default_value=monoFramerate,
         description='The framerate of the mono cameras')
 
-    declare_no_lighting_cmd = DeclareLaunchArgument(
-        'withoutLights',
-        default_value=withoutLights,
+    declare_lighting_cmd = DeclareLaunchArgument(
+        'withLights',
+        default_value=withLights,
         description='If set, STVO lighting is suppressed (on closed courses only! Führerscheinentzug!)')
 
     included_pilsbot_launch = IncludeLaunchDescription(
@@ -74,12 +75,12 @@ def generate_launch_description():
             [FindPackageShare('pilsbot_gnss_receiver'), 'launch/ublox-receiver.launch.py'])]),
     )
 
-    included_pilsbot_lighting = None
-    if not LaunchConfiguration('withoutLights'):
-        included_pilsbot_lighting = IncludeLaunchDescription(
-            PythonLaunchDescriptionSource([PathJoinSubstitution(
-                [FindPackageShare('pilsbot_indicators'), 'launch/stvo.launch.py'])]),
-        )
+    included_pilsbot_lighting = IncludeLaunchDescription(
+        PythonLaunchDescriptionSource([
+                PathJoinSubstitution([FindPackageShare('pilsbot_indicators'), 'launch/stvo.launch.py'])
+                ]),
+        condition=IfCondition(withLights),
+    )
 
 
     ld = LaunchDescription()
@@ -88,13 +89,12 @@ def generate_launch_description():
     ld.add_action(declare_colorResolution_cmd)
     ld.add_action(declare_monoFramerate_cmd)
     ld.add_action(declare_monoResolution_cmd)
-    ld.add_action(declare_no_lighting_cmd)
+    ld.add_action(declare_lighting_cmd)
 
     ld.add_action(included_pilsbot_launch)
     ld.add_action(included_jeston_camera_launch)
     ld.add_action(included_pilsbot_depthai_launch)
     ld.add_action(included_pilsbot_gnss)
-    if included_pilsbot_lighting:
-        ld.add_action(included_pilsbot_lighting)
+    ld.add_action(included_pilsbot_lighting)
 
     return ld
