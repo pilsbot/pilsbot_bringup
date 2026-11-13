@@ -9,7 +9,7 @@ def generate_launch_description():
                  'record',
                  '/camera_info',
                  '/color/video/image',
-                 'color/video/camera_info',
+                 '/color/video/camera_info',
                  '/cmd_vel',
                  '/fix',
                  '/head_mcu',
@@ -28,7 +28,7 @@ def generate_launch_description():
                  '/tf_static',
                  '/time_reference',
                  '/vel'],
-            output='screen'
-            ,cwd=
+            output='screen',
+            # cwd=
         )
     ])
