@@ -23,7 +23,7 @@ def generate_launch_description():
                  '/pilsbot_velocity_controller/cmd_vel',
                  '/pilsbot_velocity_controller/cmd_vel_out',
                  '/stereo/depth',
-                 '/stereo/camera_info'
+                 '/stereo/camera_info',
                  '/tf',
                  '/tf_static',
                  '/time_reference',
