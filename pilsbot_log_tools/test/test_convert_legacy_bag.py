@@ -20,10 +20,12 @@ from tf2_msgs.msg import TFMessage
 import yaml
 
 from pilsbot_log_tools.convert_legacy_bag import convert
+from pilsbot_log_tools.convert_legacy_bag import resolve_input
 
 approx = lambda v: pytest.approx(v, abs=1e-6)  # noqa: E731
 T = 1_000_000_000  # 1.0 s in ns
 STAMP = Time(sec=1)
+UPTIME = Time(sec=4711)
 
 
 def write_foxy_bag(uri):
@@ -49,7 +51,8 @@ def write_foxy_bag(uri):
     put('/joint_states', js)
 
     odom = Odometry()
-    odom.header.stamp, odom.header.frame_id, odom.child_frame_id = STAMP, 'odom_raw', 'base_link'
+    # The Foxy controller stamped odometry with the steady clock (uptime).
+    odom.header.stamp, odom.header.frame_id, odom.child_frame_id = UPTIME, 'odom_raw', 'base_link'
     odom.pose.pose.orientation.w = 1.0
     put('/odom', odom)
 
@@ -107,6 +110,12 @@ def test_odometry_is_re_rooted_at_the_rear_axle_centre(converted):
     [odom] = decoded('/odom')
     assert (odom.header.frame_id, odom.child_frame_id) == ('odom', 'base_footprint')
     assert odom.pose.pose.position.x == approx(-0.656645)
+
+
+def test_legacy_odometry_gets_the_recording_time(converted):
+    _, _, _, _, decoded = converted
+    [odom] = decoded('/odom')
+    assert odom.header.stamp == STAMP
 
 
 def test_tf_holds_base_footprint_and_moving_joints_from_the_current_urdf(converted):
@@ -169,3 +178,22 @@ def test_report_counts_what_happened(converted):
     assert report.odometry_dropped == 0
     assert report.replaced_messages == {'/tf': 1, '/tf_static': 1, '/robot_description': 1}
     assert math.isclose(report.wheelbase, 0.67)
+
+
+def test_bag_directory_opens_as_recorded(tmp_path):
+    (tmp_path / 'metadata.yaml').write_text('storage_identifier: sqlite3\n')
+    (tmp_path / 'bag_0.db3').write_bytes(b'')
+    assert resolve_input(tmp_path) == (str(tmp_path), 'sqlite3')
+
+
+def test_directory_converted_to_mcap_with_stale_metadata_opens_the_mcap_file(tmp_path):
+    # The 2023 bags: metadata says sqlite3, but only bag_0.mcap is left.
+    (tmp_path / 'metadata.yaml').write_text('storage_identifier: sqlite3\n')
+    (tmp_path / 'bag_0.db3-wal').write_bytes(b'')
+    (tmp_path / 'bag_0.mcap').write_bytes(b'')
+    assert resolve_input(tmp_path) == (str(tmp_path / 'bag_0.mcap'), 'mcap')
+
+
+def test_mcap_file_opens_directly(tmp_path):
+    (tmp_path / 'bag_0.mcap').write_bytes(b'')
+    assert resolve_input(tmp_path / 'bag_0.mcap') == (str(tmp_path / 'bag_0.mcap'), 'mcap')

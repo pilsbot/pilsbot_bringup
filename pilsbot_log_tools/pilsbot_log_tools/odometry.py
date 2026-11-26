@@ -25,6 +25,11 @@ BASE_FRAME = 'base_footprint'
 _HISTORY_NS = 10 * 10**9
 
 
+def is_plausible_steering_angle(angle):
+    """Reject NaN and garbage such as the 9.7e189 in 2023 bags."""
+    return math.isfinite(angle) and abs(angle) <= math.pi
+
+
 def stamp_ns(stamp):
     return stamp.sec * 10**9 + stamp.nanosec
 
@@ -41,8 +46,8 @@ class OdometryReRooter:
         self._angles = []
 
     def add_steering_angle(self, stamp, angle):
-        """Record a steering angle measured at stamp (ns). NaN is ignored."""
-        if math.isnan(angle):
+        """Record a steering angle measured at stamp (ns); implausible ones are ignored."""
+        if not is_plausible_steering_angle(angle):
             return
         i = bisect.bisect_right(self._stamps, stamp)
         self._stamps.insert(i, stamp)

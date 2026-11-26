@@ -13,6 +13,7 @@ import argparse
 from dataclasses import dataclass
 from dataclasses import field
 import math
+from pathlib import Path
 import sys
 
 from builtin_interfaces.msg import Time
@@ -24,6 +25,7 @@ from std_msgs.msg import String
 from tf2_msgs.msg import TFMessage
 
 from pilsbot_description import profile as robot_profile
+from pilsbot_log_tools.odometry import is_plausible_steering_angle
 from pilsbot_log_tools.odometry import OdometryReRooter
 from pilsbot_log_tools.odometry import stamp_ns
 from pilsbot_log_tools.sensors import head_mcu_to_dynamic_joint_state
@@ -69,6 +71,25 @@ def _stamp_or(stamp, recorded_ns):
     return stamp if stamp_ns(stamp) else _time(recorded_ns)
 
 
+def resolve_input(path):
+    """
+    Return (uri, storage id) for a bag directory or a single .mcap file.
+
+    The 2023 bags were converted to MCAP afterwards but kept metadata.yaml
+    naming the deleted .db3, so a directory with a .mcap and no .db3 opens
+    the .mcap file directly.
+    """
+    path = Path(path)
+    if path.is_file():
+        return str(path), 'mcap' if path.suffix == '.mcap' else 'sqlite3'
+    mcaps = sorted(path.glob('*.mcap'))
+    if mcaps and not list(path.glob('*.db3')):
+        if len(mcaps) > 1:
+            raise ValueError(f'{path} holds several .mcap files; pass one of them')
+        return str(mcaps[0]), 'mcap'
+    return str(path), 'sqlite3'
+
+
 def current_urdf(profile):
     import xacro
     from ament_index_python.packages import get_package_share_directory
@@ -76,13 +97,14 @@ def current_urdf(profile):
     return xacro.process_file(path, mappings={'robot_profile': str(profile.path)}).toxml()
 
 
-def convert(input_uri, output_uri, profile_name='pilsbot', input_storage='sqlite3'):
+def convert(input_path, output_uri, profile_name='pilsbot'):
     profile = robot_profile.load(profile_name)
     urdf = current_urdf(profile)
     joints = urdf_tf.joints(urdf)
     moving = {j.name: j for j in joints if j.type in urdf_tf.MOVING_TYPES}
     report = Report(wheelbase=profile.wheelbase)
 
+    input_uri, input_storage = resolve_input(input_path)
     reader = _open_reader(input_uri, input_storage)
     topics = {t.name: t for t in reader.get_all_topics_and_types()}
     start_ns = reader.get_metadata().starting_time.nanoseconds
@@ -129,7 +151,14 @@ def convert(input_uri, output_uri, profile_name='pilsbot', input_storage='sqlite
               j.transform(start) for j in joints if j.type == 'fixed'])),
           start_ns, _LATCHED_QOS)
 
-    message_types = {name: get_message(t.type) for name, t in topics.items()}
+    # Copied topics are never decoded, so their types need not be installed.
+    message_types = {}
+
+    def decode(topic, data):
+        if topic not in message_types:
+            message_types[topic] = get_message(topics[topic].type)
+        return deserialize_message(data, message_types[topic])
+
     while reader.has_next():
         topic, data, t = reader.read_next()
         type_name = topics[topic].type
@@ -139,9 +168,11 @@ def convert(input_uri, output_uri, profile_name='pilsbot', input_storage='sqlite
             continue
 
         if type_name == 'nav_msgs/msg/Odometry':
-            odom = deserialize_message(data, message_types[topic])
+            odom = decode(topic, data)
             if odom.header.frame_id == LEGACY_ODOM_FRAME:
-                odom.header.stamp = _stamp_or(odom.header.stamp, t)
+                # The Foxy controller stamped odometry with the steady clock
+                # (uptime), so the recording time is the only usable stamp.
+                odom.header.stamp = _time(t)
                 result = re_rooter.re_root(odom)
                 if result is None:
                     report.odometry_dropped += 1
@@ -156,20 +187,22 @@ def convert(input_uri, output_uri, profile_name='pilsbot', input_storage='sqlite
         write(topic, type_name, data, t)
 
         if topic == '/joint_states':
-            js = deserialize_message(data, message_types[topic])
+            js = decode(topic, data)
             stamp = _stamp_or(js.header.stamp, t)
             tfs = [moving[name].transform(stamp, position)
                    for name, position in zip(js.name, js.position)
-                   if name in moving and not math.isnan(position)]
+                   if name in moving and (
+                       name != STEERING_JOINT and math.isfinite(position)
+                       or is_plausible_steering_angle(position))]
             if tfs:
                 write('/tf', 'tf2_msgs/msg/TFMessage',
                       serialize_message(TFMessage(transforms=tfs)), t)
         elif type_name == 'pilsbot_driver_msgs/msg/HoverboardAPISensors':
             write('/dynamic_joint_states', 'control_msgs/msg/DynamicJointState',
                   serialize_message(hoverboard_to_dynamic_joint_state(
-                      deserialize_message(data, message_types[topic]), t)), t)
+                      decode(topic, data), t)), t)
         elif type_name == 'pilsbot_driver_msgs/msg/SteeringAxleSensorsStamped':
-            head = deserialize_message(data, message_types[topic])
+            head = decode(topic, data)
             head.stamp = _stamp_or(head.stamp, t)
             write('/dynamic_joint_states', 'control_msgs/msg/DynamicJointState',
                   serialize_message(head_mcu_to_dynamic_joint_state(head)), t)
@@ -180,13 +213,12 @@ def convert(input_uri, output_uri, profile_name='pilsbot', input_storage='sqlite
 
 def main(argv=None):
     parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
-    parser.add_argument('input', help='Foxy bag directory')
+    parser.add_argument('input', help='Foxy bag directory or .mcap file')
     parser.add_argument('output', help='MCAP bag directory to create')
     parser.add_argument('--robot-profile', default='pilsbot',
                         help='profile name or path (default: pilsbot)')
-    parser.add_argument('--input-storage', default='sqlite3')
     args = parser.parse_args(argv)
-    report = convert(args.input, args.output, args.robot_profile, args.input_storage)
+    report = convert(args.input, args.output, args.robot_profile)
     print(f'wheelbase {report.wheelbase} m; odometry re-rooted: {report.odometry_re_rooted}, '
           f'dropped (no steering angle yet): {report.odometry_dropped}; '
           f'replaced: {report.replaced_messages}')

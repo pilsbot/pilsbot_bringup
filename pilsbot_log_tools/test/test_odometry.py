@@ -98,3 +98,10 @@ def test_front_axle_heading_is_carried_into_the_chassis_heading():
     p = odom.pose.pose
     assert (p.position.x, p.position.y) == (approx(1.0 - 0.640075), approx(2.0 - 0.197998))
     assert 2 * math.atan2(p.orientation.z, p.orientation.w) == approx(0.3)
+
+
+def test_implausible_steering_angle_is_skipped():
+    # 2023 bags carry 9.7e189 when the head MCU reading was broken.
+    r = re_rooter_with((1.0, 0.2), (1.02, 9.7e189), (1.04, 0.21))
+    odom, _ = r.re_root(front_odometry(1.04))
+    assert odom.twist.twist.angular.z == approx(0.25)
