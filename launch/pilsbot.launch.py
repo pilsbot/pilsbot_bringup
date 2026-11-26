@@ -14,6 +14,12 @@ def generate_launch_description():
     monoResolution = LaunchConfiguration('monoResolution',  default="480p")
     monoFramerate = LaunchConfiguration('monoFramerate',    default=10)
     withLights = LaunchConfiguration('withLights',   default=True)      # deactivate with withLights:=false
+    robot_profile = LaunchConfiguration('robot_profile', default='pilsbot')
+
+    declare_robot_profile_cmd = DeclareLaunchArgument(
+        'robot_profile',
+        default_value=robot_profile,
+        description='Robot profile: a name shipped with pilsbot_description, or a path.')
 
     declare_camera_model_cmd = DeclareLaunchArgument(
         'camera_model',
@@ -53,6 +59,7 @@ def generate_launch_description():
     included_pilsbot_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([PathJoinSubstitution(
             [FindPackageShare('pilsbot_driver'), 'launch/pilsbot_teleop.launch.py'])]),
+        launch_arguments={'robot_profile': robot_profile}.items(),
     )
 
     included_jeston_camera_launch = IncludeLaunchDescription(
@@ -79,6 +86,7 @@ def generate_launch_description():
         PythonLaunchDescriptionSource([
                 PathJoinSubstitution([FindPackageShare('pilsbot_indicators'), 'launch/stvo.launch.py'])
                 ]),
+        launch_arguments={'robot_profile': robot_profile}.items(),
         condition=IfCondition(withLights),
     )
 
@@ -90,6 +98,7 @@ def generate_launch_description():
     ld.add_action(declare_monoFramerate_cmd)
     ld.add_action(declare_monoResolution_cmd)
     ld.add_action(declare_lighting_cmd)
+    ld.add_action(declare_robot_profile_cmd)
 
     ld.add_action(included_pilsbot_launch)
     ld.add_action(included_jeston_camera_launch)
