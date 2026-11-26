@@ -34,5 +34,6 @@ endif()
 
 install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch
         FILES_MATCHING PATTERN "*.py")
+install(DIRECTORY config foxglove DESTINATION share/${PROJECT_NAME})
 
 ament_package()

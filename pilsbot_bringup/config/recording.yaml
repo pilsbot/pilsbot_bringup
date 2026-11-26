@@ -1,0 +1,50 @@
+# Topics recorded by log_kohl.launch.py, grouped so short test drives can
+# leave the camera out: ros2 launch pilsbot_bringup log_kohl.launch.py groups:=robot_state,gnss
+#
+# Recordings are MCAP without compression (camera frames are already JPEG and
+# the Nano's CPU is tight), split every max_bag_duration seconds so a crash or
+# a full disk loses at most one file.
+
+storage: mcap
+max_bag_duration: 300
+
+groups:
+  robot_state:
+    - /tf
+    - /tf_static
+    - /robot_description
+    - /joint_states
+    # Hoverboard and Head MCU sensors (ADR 0006); replaces /hoverboard_api and /head_mcu.
+    - /dynamic_joint_states
+    - /odom
+
+  commands:
+    - /joy
+    - /pilsbot_velocity_controller/cmd_vel
+    - /pilsbot_velocity_controller/cmd_vel_out
+    - /cmd/headlight
+    - /cmd/turn_left
+    - /cmd/turn_right
+    - /cmd/flash
+    - /lighting/indicator/left
+    - /lighting/indicator/right
+    - /lighting/brake
+    - /lighting/headlight
+    - /lighting/party
+
+  gnss:
+    - /fix
+    - /vel
+    - /heading
+    - /time_reference
+
+  camera:
+    # OAK via mjpeg_node: JPEG straight from the camera's encoder (ADR 0004/0005).
+    # Decoded Image topics are deliberately not recorded.
+    - /camera/color/image_raw/compressed
+    - /camera/left/image_rect/compressed
+    - /camera/right/image_rect/compressed
+    # CSI camera (jetson_camera). TODO: confirm the resolved names on the
+    # robot; Foxy-era bags have them as /image_raw and /camera_info.
+    - /image_raw/compressed
+    - /camera_info

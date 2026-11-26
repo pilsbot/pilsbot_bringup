@@ -12,6 +12,7 @@ def generate_launch_description():
             [FindPackageShare('pilsbot_bringup'), 'launch/pilsbot.launch.py'])])
     )
 
+    # Arguments such as output_dir:=... and groups:=... reach log_kohl.launch.py.
     included_logging_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([PathJoinSubstitution(
             [FindPackageShare('pilsbot_bringup'), 'launch/log_kohl.launch.py'])])

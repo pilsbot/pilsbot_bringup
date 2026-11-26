@@ -1,0 +1,204 @@
+{
+  "configById": {
+    "3D!pilsbot": {
+      "followTf": "base_footprint",
+      "followMode": "follow-pose",
+      "scene": {},
+      "transforms": {},
+      "publish": {},
+      "imageMode": {},
+      "cameraState": {
+        "distance": 6,
+        "perspective": true,
+        "phi": 50,
+        "thetaOffset": 45,
+        "targetOffset": [
+          0,
+          0,
+          0
+        ],
+        "target": [
+          0,
+          0,
+          0
+        ],
+        "targetOrientation": [
+          0,
+          0,
+          0,
+          1
+        ],
+        "fovy": 45,
+        "near": 0.01,
+        "far": 5000
+      },
+      "layers": {
+        "grid": {
+          "layerId": "foxglove.Grid",
+          "instanceId": "grid",
+          "label": "Grid",
+          "visible": true,
+          "frameLocked": true,
+          "size": 20,
+          "divisions": 20
+        },
+        "urdf": {
+          "layerId": "foxglove.Urdf",
+          "instanceId": "urdf",
+          "label": "Pilsbot (URDF)",
+          "visible": true,
+          "sourceType": "topic",
+          "topic": "/robot_description"
+        }
+      },
+      "topics": {
+        "/odom": {
+          "visible": true
+        }
+      }
+    },
+    "Image!oak": {
+      "imageMode": {
+        "imageTopic": "/camera/color/image_raw/compressed"
+      },
+      "cameraState": {},
+      "followTf": "",
+      "scene": {},
+      "transforms": {},
+      "topics": {},
+      "layers": {},
+      "publish": {}
+    },
+    "map!gnss": {
+      "layer": "map",
+      "zoomLevel": 18,
+      "followTopic": "/fix",
+      "disabledTopics": [],
+      "topicColors": {}
+    },
+    "Plot!drive": {
+      "title": "Speed and steering",
+      "paths": [
+        {
+          "value": "/odom.twist.twist.linear.x",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "speed (m/s)"
+        },
+        {
+          "value": "/studio_script/pilsbot_signals.steering_angle",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "steering angle (rad, + = right)"
+        },
+        {
+          "value": "/pilsbot_velocity_controller/cmd_vel.drive.speed",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "commanded speed (m/s)"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240
+    },
+    "Plot!power": {
+      "title": "Battery and motors",
+      "paths": [
+        {
+          "value": "/studio_script/pilsbot_signals.voltage",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "battery (V)"
+        },
+        {
+          "value": "/studio_script/pilsbot_signals.current_motor_0",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "motor 0 (A)"
+        },
+        {
+          "value": "/studio_script/pilsbot_signals.current_motor_1",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "motor 1 (A)"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240
+    },
+    "Plot!head_mcu": {
+      "title": "Head MCU",
+      "paths": [
+        {
+          "value": "/studio_script/pilsbot_signals.steering_angle_raw",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "steering raw"
+        },
+        {
+          "value": "/studio_script/pilsbot_signals.endstop_left",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "endstop left"
+        },
+        {
+          "value": "/studio_script/pilsbot_signals.endstop_right",
+          "enabled": true,
+          "timestampMethod": "receiveTime",
+          "label": "endstop right"
+        }
+      ],
+      "showXAxisLabels": true,
+      "showYAxisLabels": true,
+      "showLegend": true,
+      "legendDisplay": "floating",
+      "isSynced": true,
+      "xAxisVal": "timestamp",
+      "sidebarDimension": 240
+    }
+  },
+  "globalVariables": {},
+  "userNodes": {
+    "pilsbot-signals": {
+      "name": "pilsbot_signals",
+      "sourceCode": "// Foxglove user script (embedded in pilsbot.json; edit here, then paste\n// into the layout). Looks values up by name, because the order of joints\n// and interfaces in /joint_states and /dynamic_joint_states is not fixed,\n// and converted legacy bags put each sensor in its own message.\nimport { Input } from \"./types\";\n\nexport const inputs = [\"/joint_states\", \"/dynamic_joint_states\"];\nexport const output = \"/studio_script/pilsbot_signals\";\n\ntype Signals = {\n  steering_angle: number;\n  voltage: number;\n  current_motor_0: number;\n  current_motor_1: number;\n  steering_angle_raw: number;\n  endstop_left: number;\n  endstop_right: number;\n};\n\n// Latest value of every signal, so each output message is complete.\nconst latest: Signals = {\n  steering_angle: NaN,\n  voltage: NaN,\n  current_motor_0: NaN,\n  current_motor_1: NaN,\n  steering_angle_raw: NaN,\n  endstop_left: NaN,\n  endstop_right: NaN,\n};\n\nconst interfaces: Record<string, Record<string, keyof Signals>> = {\n  hoverboard_api: {\n    \"voltage\": \"voltage\",\n    \"avg_amperage_motor.0\": \"current_motor_0\",\n    \"avg_amperage_motor.1\": \"current_motor_1\",\n  },\n  head_mcu: {\n    \"steering_angle_raw\": \"steering_angle_raw\",\n    \"endstop_l\": \"endstop_left\",\n    \"endstop_r\": \"endstop_right\",\n  },\n};\n\nexport default function script(\n  event: Input<\"/joint_states\"> | Input<\"/dynamic_joint_states\">,\n): Signals {\n  if (event.topic === \"/joint_states\") {\n    const i = event.message.name.indexOf(\"steering_axle_joint\");\n    if (i >= 0) {\n      latest.steering_angle = event.message.position[i];\n    }\n  } else {\n    event.message.joint_names.forEach((joint, j) => {\n      const wanted = interfaces[joint];\n      const values = event.message.interface_values[j];\n      if (!wanted || !values) {\n        return;\n      }\n      values.interface_names.forEach((name, k) => {\n        const signal = wanted[name];\n        if (signal) {\n          latest[signal] = values.values[k];\n        }\n      });\n    });\n  }\n  return { ...latest };\n}\n"
+    }
+  },
+  "playbackConfig": {
+    "speed": 1
+  },
+  "layout": {
+    "direction": "row",
+    "splitPercentage": 55,
+    "first": {
+      "direction": "column",
+      "splitPercentage": 60,
+      "first": "3D!pilsbot",
+      "second": "Image!oak"
+    },
+    "second": {
+      "direction": "column",
+      "splitPercentage": 50,
+      "first": {
+        "direction": "row",
+        "first": "map!gnss",
+        "second": "Plot!drive"
+      },
+      "second": {
+        "direction": "row",
+        "first": "Plot!power",
+        "second": "Plot!head_mcu"
+      }
+    }
+  }
+}
