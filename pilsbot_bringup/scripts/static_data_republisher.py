@@ -6,7 +6,8 @@ Humble's rosbag2 writes latched messages only into the first file of a
 split bag. Re-publishing them every few seconds puts them into each split
 file, so every file opens in Foxglove with the URDF and static TF.
 
-Static transforms of all publishers are merged into one message. Our own
+Static transforms of all publishers are merged into one message, by
+child frame (the latest transform wins). Our own
 messages come back through the subscriptions; they are recognised by being
 equal to what was last published and ignored, so they never overwrite a
 newer message from the real publisher.
@@ -21,6 +22,11 @@ from tf2_msgs.msg import TFMessage
 
 LATCHED = QoSProfile(depth=1, durability=DurabilityPolicy.TRANSIENT_LOCAL,
                      reliability=ReliabilityPolicy.RELIABLE)
+# Every /tf_static publisher hands its latched message to a new subscriber.
+# With depth 1 they would overwrite each other before the callback runs, so
+# subscribe with a deep history, like tf2's static listener does.
+LATCHED_MANY = QoSProfile(depth=100, durability=DurabilityPolicy.TRANSIENT_LOCAL,
+                          reliability=ReliabilityPolicy.RELIABLE)
 
 
 class StaticDataRepublisher(Node):
@@ -34,8 +40,9 @@ class StaticDataRepublisher(Node):
         self._published_description = None
         self._tf_pub = self.create_publisher(TFMessage, '/tf_static', LATCHED)
         self._description_pub = self.create_publisher(String, '/robot_description', LATCHED)
-        self.create_subscription(TFMessage, '/tf_static', self._on_tf_static, LATCHED)
-        self.create_subscription(String, '/robot_description', self._on_description, LATCHED)
+        self.create_subscription(TFMessage, '/tf_static', self._on_tf_static, LATCHED_MANY)
+        self.create_subscription(
+            String, '/robot_description', self._on_description, LATCHED_MANY)
         self.create_timer(period, self._republish)
 
     def _on_tf_static(self, msg):
