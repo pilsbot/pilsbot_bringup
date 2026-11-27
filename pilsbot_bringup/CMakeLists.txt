@@ -35,7 +35,8 @@ if(BUILD_TESTING)
   ament_add_pytest_test(test_log_kohl test/test_log_kohl.py)
 endif()
 
-install(PROGRAMS scripts/static_data_republisher DESTINATION lib/${PROJECT_NAME})
+install(PROGRAMS scripts/static_data_republisher.py DESTINATION lib/${PROJECT_NAME}
+        RENAME static_data_republisher)
 
 install(DIRECTORY launch/ DESTINATION share/${PROJECT_NAME}/launch
         FILES_MATCHING PATTERN "*.py")
