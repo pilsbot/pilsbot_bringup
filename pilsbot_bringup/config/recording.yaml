@@ -3,7 +3,10 @@
 #
 # Recordings are MCAP without compression (camera frames are already JPEG and
 # the Nano's CPU is tight), split every max_bag_duration seconds so a crash or
-# a full disk loses at most one file.
+# a full disk loses at most one file. Humble's rosbag2 writes latched topics
+# (/tf_static, /robot_description) only into the first file; log_kohl.launch.py
+# runs static_data_republisher so that each file holds them within its first
+# static_republish_period seconds and opens on its own.
 
 storage: mcap
 max_bag_duration: 300
@@ -17,6 +20,10 @@ groups:
     # Hoverboard and Head MCU sensors (ADR 0006); replaces /hoverboard_api and /head_mcu.
     - /dynamic_joint_states
     - /odom
+
+  logs:
+    # Node log output, for diagnosing the first drives on Humble.
+    - /rosout
 
   commands:
     - /joy
