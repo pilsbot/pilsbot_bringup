@@ -13,6 +13,7 @@ equal to what was last published and ignored, so they never overwrite a
 newer message from the real publisher.
 """
 import rclpy
+from rclpy.executors import ExternalShutdownException
 from rclpy.node import Node
 from rclpy.qos import DurabilityPolicy
 from rclpy.qos import QoSProfile
@@ -69,7 +70,7 @@ def main():
     node = StaticDataRepublisher()
     try:
         rclpy.spin(node)
-    except KeyboardInterrupt:
+    except (KeyboardInterrupt, ExternalShutdownException):
         pass
     finally:
         node.destroy_node()
