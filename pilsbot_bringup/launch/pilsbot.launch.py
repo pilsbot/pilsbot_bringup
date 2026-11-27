@@ -35,6 +35,7 @@ def foxglove_bridge_setup(context):
     capabilities = foxglove_capabilities_from(
         LaunchConfiguration('foxglove_capabilities').perform(context))
     parameters = {
+        'use_sim_time': LaunchConfiguration('use_sim_time').perform(context) == 'true',
         'port': int(LaunchConfiguration('foxglove_port').perform(context)),
         # An empty list would be dropped as an untyped parameter, so the bridge
         # would fall back to its defaults (all capabilities). '' is no capability.
@@ -58,9 +59,22 @@ def foxglove_bridge_setup(context):
     return actions
 
 
+def devices_setup(context, gnss, lighting):
+    """GNSS and lighting talk to devices that only the robot has."""
+    hardware = LaunchConfiguration('hardware').perform(context)
+    if hardware == 'real':
+        return [gnss, lighting]
+    # The simulation has no GNSS receiver and no head MCU (lighting would also
+    # fail to open its serial port).
+    return [LogInfo(msg=f'hardware:={hardware}: GNSS and lighting are not '
+                        'started (no devices in the simulation).')]
+
+
 def generate_launch_description():
     # Stack container (ADR 0003): driver, teleop, GNSS, lighting, foxglove_bridge.
     # The cameras run in the camera container: camera.launch.py.
+    # hardware:=gazebo (pilsbot_simulation) starts the same stack without GNSS
+    # and lighting; the controller manager then runs inside Gazebo.
     withLights = LaunchConfiguration('withLights', default='true')
     robot_profile = LaunchConfiguration('robot_profile', default='pilsbot')
     foxglove = LaunchConfiguration('foxglove', default='true')
@@ -86,6 +100,15 @@ def generate_launch_description():
                     'parameters, parametersSubscribe, services (or "all"); anyone on the '
                     'network can then drive and reconfigure the robot.')
 
+    declare_hardware_cmd = DeclareLaunchArgument(
+        'hardware', default_value='real', choices=['real', 'gazebo'],
+        description='real: the robot\'s devices. gazebo: the simulation '
+                    '(pilsbot_simulation); no GNSS and no lighting.')
+
+    declare_use_sim_time_cmd = DeclareLaunchArgument(
+        'use_sim_time', default_value='false', choices=['true', 'false'],
+        description='Use /clock (true in simulation).')
+
     declare_robot_profile_cmd = DeclareLaunchArgument(
         'robot_profile',
         default_value=robot_profile,
@@ -100,7 +123,11 @@ def generate_launch_description():
     included_pilsbot_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([PathJoinSubstitution(
             [FindPackageShare('pilsbot_driver'), 'launch/pilsbot_teleop.launch.py'])]),
-        launch_arguments={'robot_profile': robot_profile}.items(),
+        launch_arguments={
+            'robot_profile': robot_profile,
+            'hardware': LaunchConfiguration('hardware'),
+            'use_sim_time': LaunchConfiguration('use_sim_time'),
+        }.items(),
     )
 
     included_pilsbot_gnss = IncludeLaunchDescription(
@@ -115,10 +142,15 @@ def generate_launch_description():
         condition=IfCondition(withLights),
     )
 
+    devices = OpaqueFunction(
+        function=devices_setup, args=[included_pilsbot_gnss, included_pilsbot_lighting])
+
     foxglove_bridge = OpaqueFunction(
         function=foxglove_bridge_setup, condition=IfCondition(foxglove))
 
     ld = LaunchDescription()
+    ld.add_action(declare_hardware_cmd)
+    ld.add_action(declare_use_sim_time_cmd)
     ld.add_action(declare_lighting_cmd)
     ld.add_action(declare_robot_profile_cmd)
     ld.add_action(declare_foxglove_cmd)
@@ -126,8 +158,7 @@ def generate_launch_description():
     ld.add_action(declare_foxglove_capabilities_cmd)
 
     ld.add_action(included_pilsbot_launch)
-    ld.add_action(included_pilsbot_gnss)
-    ld.add_action(included_pilsbot_lighting)
+    ld.add_action(devices)
     ld.add_action(foxglove_bridge)
 
     return ld

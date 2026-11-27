@@ -6,6 +6,7 @@ import math
 from builtin_interfaces.msg import Time
 from geometry_msgs.msg import TransformStamped
 from nav_msgs.msg import Odometry
+from pilsbot_description import profile as robot_profile
 from pilsbot_driver_msgs.msg import HoverboardAPISensors
 from pilsbot_driver_msgs.msg import SteeringAxleSensorsStamped
 import pytest
@@ -158,10 +159,31 @@ def test_robot_description_is_the_current_urdf(converted):
 
 
 def test_robot_description_is_the_real_robot_not_the_simulation(converted):
-    # As pilsbot_driver runs xacro: use_fake_hardware:=false.
+    # As pilsbot_driver runs xacro: hardware:=real.
     _, _, _, _, decoded = converted
     [description] = decoded('/robot_description')
     assert 'GazeboSystem' not in description.data
+
+
+def test_current_urdf_asks_xacro_for_the_real_hardware(monkeypatch):
+    # The same xacro arguments as pilsbot_driver's launch with hardware:=real.
+    import xacro
+    seen = {}
+
+    class Document:
+        def toxml(self):
+            return '<robot/>'
+
+    def process_file(path, mappings):
+        seen.update(mappings)
+        return Document()
+
+    monkeypatch.setattr(xacro, 'process_file', process_file)
+    convert_legacy_bag.current_urdf(robot_profile.load('pilsbot'))
+    assert seen['hardware'] == 'real'
+    # Transition guard until pilsbot_description#6: the installed description
+    # still reads use_fake_hardware (default true: Gazebo).
+    assert seen['use_fake_hardware'] == 'false'
 
 
 def test_sensors_are_added_as_dynamic_joint_states_and_kept(converted):

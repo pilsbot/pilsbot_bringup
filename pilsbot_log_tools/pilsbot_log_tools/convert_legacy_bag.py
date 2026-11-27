@@ -109,6 +109,11 @@ def current_urdf(profile):
     # The same arguments as pilsbot_driver's launch: the real hardware.
     return xacro.process_file(path, mappings={
         'robot_profile': str(profile.path),
+        'hardware': 'real',
+        # Transition: until pilsbot_description replaces use_fake_hardware
+        # (default true: Gazebo) with `hardware`, it still needs this line.
+        # xacro ignores undeclared arguments, so it is harmless afterwards;
+        # remove it once pilsbot_description#6 is merged (noted there).
         'use_fake_hardware': 'false',
         'controller_config': 'acker_diff_controller.yaml',
     }).toxml()
