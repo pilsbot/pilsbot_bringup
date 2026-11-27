@@ -39,12 +39,22 @@ groups:
     - /time_reference
 
   camera:
-    # OAK via mjpeg_node: JPEG straight from the camera's encoder (ADR 0004/0005).
-    # Decoded Image topics are deliberately not recorded.
-    - /camera/color/image_raw/compressed
-    - /camera/left/image_rect/compressed
-    - /camera/right/image_rect/compressed
-    # CSI camera (jetson_camera). TODO: confirm the resolved names on the
-    # robot; Foxy-era bags have them as /image_raw and /camera_info.
+    # Transition (ADR 0003): the cameras run in the Foxy camera container, so
+    # these are the Foxy topic names. The OAK (pilsbot_depthai foxy-devel,
+    # rgb_stereo_node) publishes the color video and /stereo/depth as raw
+    # Images via image_transport; the */compressed topics are JPEG from the
+    # compressed plugin, encoded in the camera container on demand. Depth is
+    # not recorded (16-bit, only compressedDepth/PNG, too heavy for the Nano).
+    # Revert when the camera container moves to Humble, to the names of the
+    # Humble mjpeg_node (OAK, JPEG straight from the camera's encoder,
+    # ADR 0004/0005; decoded Image topics are deliberately not recorded):
+    #   - /camera/color/image_raw/compressed
+    #   - /camera/left/image_rect/compressed
+    #   - /camera/right/image_rect/compressed
+    - /color/video/image/compressed
+    - /color/video/camera_info
+    # CSI camera (jetson_camera master, sub-node camsub): Foxy resolves its
+    # topics to /image_raw and /camera_info. TODO: confirm the resolved names
+    # under Humble once the camera container moves there.
     - /image_raw/compressed
     - /camera_info
