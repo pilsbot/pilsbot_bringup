@@ -128,7 +128,7 @@ def convert(input_path, output_uri, profile_name='pilsbot'):
     if partial.exists():
         print(f'Removing {partial} left by an earlier, interrupted run', file=sys.stderr)
         shutil.rmtree(partial)
-    partial.mkdir()
+    partial.mkdir(parents=True)
     try:
         report = _convert(input_path, partial / output.name, profile_name)
         (partial / output.name).rename(output)

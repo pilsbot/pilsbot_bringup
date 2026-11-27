@@ -227,6 +227,14 @@ def test_failed_conversion_leaves_no_output_and_can_be_rerun(tmp_path, monkeypat
         'humble_0.mcap', 'metadata.yaml']
 
 
+def test_missing_parent_directories_of_the_output_are_created(tmp_path):
+    write_foxy_bag(tmp_path / 'foxy')
+    output = tmp_path / 'not' / 'yet' / 'humble'
+    convert(tmp_path / 'foxy', output, 'pilsbot')
+    assert sorted(p.name for p in output.parent.iterdir()) == ['humble']
+    assert sorted(p.name for p in output.iterdir()) == ['humble_0.mcap', 'metadata.yaml']
+
+
 def test_existing_output_is_not_touched(tmp_path):
     write_foxy_bag(tmp_path / 'foxy')
     (tmp_path / 'humble').mkdir()
