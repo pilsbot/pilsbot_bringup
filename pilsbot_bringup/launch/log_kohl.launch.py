@@ -17,6 +17,10 @@ from launch_ros.actions import Node
 import yaml
 
 DEFAULT_OUTPUT_DIR = '/workspaces/bags'
+# Where the devcontainers bind-mount DEFAULT_OUTPUT_DIR from on the robot.
+HOST_OUTPUT_DIR = '/media/externSSD/bags'
+# Recording is refused unless output_dir contains this file.
+DEFAULT_MARKER = '.pilsbot_bags'
 
 
 def banner(*lines):
@@ -60,28 +64,40 @@ def _existing_ancestor(path):
     return path
 
 
-def output_dir_problems(output_dir, min_free_gb, system_paths=('/', '/etc/hostname')):
+def output_dir_problems(output_dir, min_free_gb, marker=DEFAULT_MARKER):
     """
-    Return why output_dir is probably not the external SSD (empty if fine).
+    Return why recording to output_dir is refused (empty if fine).
 
     Without the SSD, /media/externSSD/bags is a plain directory on the Nano's
-    root filesystem, which recording would fill. Natively the output dir is
-    then on the same filesystem as /. In a container the bind mount looks
-    like a mount either way, but its filesystem is then the one that also
-    holds the Docker files, such as /etc/hostname. The free space check
-    catches what is left: the SD card has a few GB free, the SSD hundreds.
+    root filesystem, which recording would fill. Filesystem heuristics do not
+    tell the two apart reliably in a container (overlayfs root, Docker's
+    data-root possibly on the SSD itself), so the SSD carries a marker file
+    instead: no marker, no recording. The free space check stays.
     """
-    existing = _existing_ancestor(output_dir)
-    device = os.stat(existing).st_dev
     problems = []
-    for system_path in system_paths:
-        if os.path.exists(system_path) and os.stat(system_path).st_dev == device:
-            problems.append(f'{output_dir} is on the same filesystem as {system_path}')
-            break
+    marker_path = os.path.join(output_dir, marker)
+    if not os.path.exists(marker_path):
+        problems.append(f'no marker file {marker_path}')
+    existing = _existing_ancestor(output_dir)
     free_gb = shutil.disk_usage(existing).free / 1e9
     if free_gb < min_free_gb:
         problems.append(f'only {free_gb:.1f} GB free in {existing} (min_free_gb:={min_free_gb:g})')
     return problems
+
+
+def refusal(output_dir, marker, problems):
+    """Return the banner lines for not recording, saying what to do."""
+    lines = ['NOT RECORDING to ' + output_dir + ':', *[f'  - {p}' for p in problems]]
+    if any(p.startswith('no marker file') for p in problems):
+        if os.path.normpath(output_dir) == DEFAULT_OUTPUT_DIR:
+            where = f'on the robot host (not in the container): touch {HOST_OUTPUT_DIR}/{marker}'
+        else:
+            where = f'touch {os.path.join(output_dir, marker)}'
+        lines += ['Is the external SSD mounted? Mount it first.',
+                  'If it is mounted and was never marked, mark it ONCE, with the SSD mounted,',
+                  f'  {where}',
+                  'Then start log_kohl.launch.py again.']
+    return lines + ['To record anyway (not recommended): check_output_dir:=false']
 
 
 def recorder_exited(event, context):
@@ -112,15 +128,14 @@ def launch_setup(context):
     cmd = record_command(config, LaunchConfiguration('groups').perform(context), output)
 
     # Refusing only skips the recorder; the driving stack must not depend on it.
-    problems = output_dir_problems(output_dir, min_free_gb)
+    marker = LaunchConfiguration('output_dir_marker').perform(context)
+    problems = output_dir_problems(output_dir, min_free_gb, marker)
     if problems and check:
-        return actions + [LogInfo(msg=banner(
-            'NOT RECORDING: the output dir does not look like the external SSD:',
-            *problems,
-            'Mount the SSD, or pass check_output_dir:=false to record anyway.'))]
+        return actions + [LogInfo(msg=banner(*refusal(output_dir, marker, problems)))]
     if problems:
         actions.append(LogInfo(msg=banner(
-            'check_output_dir:=false, so recording although:', *problems)))
+            'check_output_dir:=false, so recording although:',
+            *[f'  - {p}' for p in problems])))
 
     if period > 0:
         actions.append(Node(
@@ -153,8 +168,12 @@ def generate_launch_description():
             description='Topic groups and storage settings'),
         DeclareLaunchArgument(
             'check_output_dir', default_value='true',
-            description='Do not record when output_dir is on the root filesystem or has '
-                        'less than min_free_gb free; false only warns.'),
+            description='Do not record unless output_dir contains output_dir_marker and has '
+                        'at least min_free_gb free; false only warns.'),
+        DeclareLaunchArgument(
+            'output_dir_marker', default_value=DEFAULT_MARKER,
+            description='File that marks output_dir as the bag disk (the external SSD). '
+                        f'Create it once on the host: touch {HOST_OUTPUT_DIR}/{DEFAULT_MARKER}'),
         DeclareLaunchArgument(
             'min_free_gb', default_value='10',
             description='Free space in GB that check_output_dir requires'),
