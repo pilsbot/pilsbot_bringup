@@ -19,7 +19,9 @@ from std_msgs.msg import String
 from tf2_msgs.msg import TFMessage
 import yaml
 
+from pilsbot_log_tools import convert_legacy_bag
 from pilsbot_log_tools.convert_legacy_bag import convert
+from pilsbot_log_tools.convert_legacy_bag import main
 from pilsbot_log_tools.convert_legacy_bag import resolve_input
 
 approx = lambda v: pytest.approx(v, abs=1e-6)  # noqa: E731
@@ -28,7 +30,7 @@ STAMP = Time(sec=1)
 UPTIME = Time(sec=4711)
 
 
-def write_foxy_bag(uri):
+def write_foxy_bag(uri, odom_frame='odom_raw'):
     w = rosbag2_py.SequentialWriter()
     w.open(rosbag2_py.StorageOptions(uri=str(uri), storage_id='sqlite3'),
            rosbag2_py.ConverterOptions('cdr', 'cdr'))
@@ -52,7 +54,7 @@ def write_foxy_bag(uri):
 
     odom = Odometry()
     # The Foxy controller stamped odometry with the steady clock (uptime).
-    odom.header.stamp, odom.header.frame_id, odom.child_frame_id = UPTIME, 'odom_raw', 'base_link'
+    odom.header.stamp, odom.header.frame_id, odom.child_frame_id = UPTIME, odom_frame, 'base_link'
     odom.pose.pose.orientation.w = 1.0
     put('/odom', odom)
 
@@ -155,6 +157,13 @@ def test_robot_description_is_the_current_urdf(converted):
     assert is_transient_local(metadata['/robot_description'])
 
 
+def test_robot_description_is_the_real_robot_not_the_simulation(converted):
+    # As pilsbot_driver runs xacro: use_fake_hardware:=false.
+    _, _, _, _, decoded = converted
+    [description] = decoded('/robot_description')
+    assert 'GazeboSystem' not in description.data
+
+
 def test_sensors_are_added_as_dynamic_joint_states_and_kept(converted):
     _, _, _, _, decoded = converted
     sensors = {m.joint_names[0]: m for m in decoded('/dynamic_joint_states')}
@@ -176,6 +185,8 @@ def test_report_counts_what_happened(converted):
     report = converted[1]
     assert report.odometry_re_rooted == 1
     assert report.odometry_dropped == 0
+    assert report.odometry_not_re_rooted == {}
+    assert report.stale_steering_rate == 0
     assert report.replaced_messages == {'/tf': 1, '/tf_static': 1, '/robot_description': 1}
     assert math.isclose(report.wheelbase, 0.67)
 
@@ -197,3 +208,45 @@ def test_directory_converted_to_mcap_with_stale_metadata_opens_the_mcap_file(tmp
 def test_mcap_file_opens_directly(tmp_path):
     (tmp_path / 'bag_0.mcap').write_bytes(b'')
     assert resolve_input(tmp_path / 'bag_0.mcap') == (str(tmp_path / 'bag_0.mcap'), 'mcap')
+
+
+def test_failed_conversion_leaves_no_output_and_can_be_rerun(tmp_path, monkeypatch):
+    write_foxy_bag(tmp_path / 'foxy')
+
+    def broken(*_):
+        raise RuntimeError('boom')
+    monkeypatch.setattr(convert_legacy_bag, 'head_mcu_to_dynamic_joint_state', broken)
+    with pytest.raises(RuntimeError, match='boom'):
+        convert(tmp_path / 'foxy', tmp_path / 'humble', 'pilsbot')
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['foxy']
+
+    monkeypatch.undo()
+    convert(tmp_path / 'foxy', tmp_path / 'humble', 'pilsbot')
+    assert sorted(p.name for p in tmp_path.iterdir()) == ['foxy', 'humble']
+    assert sorted(p.name for p in (tmp_path / 'humble').iterdir()) == [
+        'humble_0.mcap', 'metadata.yaml']
+
+
+def test_existing_output_is_not_touched(tmp_path):
+    write_foxy_bag(tmp_path / 'foxy')
+    (tmp_path / 'humble').mkdir()
+    (tmp_path / 'humble' / 'keep').write_text('x')
+    with pytest.raises(FileExistsError):
+        convert(tmp_path / 'foxy', tmp_path / 'humble', 'pilsbot')
+    assert [p.name for p in (tmp_path / 'humble').iterdir()] == ['keep']
+
+
+def test_odometry_in_another_frame_is_copied_and_reported(tmp_path, capsys):
+    write_foxy_bag(tmp_path / 'foxy', odom_frame='odom')
+    assert main([str(tmp_path / 'foxy'), str(tmp_path / 'humble')]) == 0
+    assert 'WARNING' in capsys.readouterr().err
+    report = convert(tmp_path / 'foxy', tmp_path / 'humble2', 'pilsbot')
+    assert report.odometry_re_rooted == 0
+    assert report.odometry_not_re_rooted == {'/odom': 1}
+
+
+def test_help_warns_about_wal_side_files(capsys):
+    with pytest.raises(SystemExit):
+        main(['--help'])
+    out = capsys.readouterr().out
+    assert '-wal' in out and '-shm' in out
