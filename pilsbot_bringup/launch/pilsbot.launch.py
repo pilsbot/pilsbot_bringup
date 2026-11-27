@@ -61,12 +61,13 @@ def foxglove_bridge_setup(context):
 
 def devices_setup(context, gnss, lighting):
     """GNSS and lighting talk to devices that only the robot has."""
-    if LaunchConfiguration('hardware').perform(context) == 'real':
+    hardware = LaunchConfiguration('hardware').perform(context)
+    if hardware == 'real':
         return [gnss, lighting]
     # The simulation has no GNSS receiver and no head MCU (lighting would also
     # fail to open its serial port).
-    return [LogInfo(msg='hardware:=gazebo: GNSS and lighting are not started '
-                        '(no devices in the simulation).')]
+    return [LogInfo(msg=f'hardware:={hardware}: GNSS and lighting are not '
+                        'started (no devices in the simulation).')]
 
 
 def generate_launch_description():

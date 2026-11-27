@@ -112,8 +112,8 @@ def current_urdf(profile):
         'hardware': 'real',
         # Transition: until pilsbot_description replaces use_fake_hardware
         # (default true: Gazebo) with `hardware`, it still needs this line.
-        # xacro ignores undeclared arguments, so it is harmless afterwards and
-        # goes away with that change.
+        # xacro ignores undeclared arguments, so it is harmless afterwards;
+        # remove it once pilsbot_description#6 is merged (noted there).
         'use_fake_hardware': 'false',
         'controller_config': 'acker_diff_controller.yaml',
     }).toxml()

@@ -49,6 +49,8 @@ def includes(context, actions):
     for include in actions:
         if isinstance(include, IncludeLaunchDescription):
             location = include.launch_description_source.location
+            # Humble's launch prints an unresolved substitution path as
+            # "...FindPackageShare(pkg='<name>')..."; no public accessor.
             [package] = re.findall(r"FindPackageShare\(pkg='([^']+)'\)", location)
             started[package] = {evaluate(context, key): evaluate(context, value)
                                 for key, value in include.launch_arguments}

@@ -181,6 +181,9 @@ def test_current_urdf_asks_xacro_for_the_real_hardware(monkeypatch):
     monkeypatch.setattr(xacro, 'process_file', process_file)
     convert_legacy_bag.current_urdf(robot_profile.load('pilsbot'))
     assert seen['hardware'] == 'real'
+    # Transition guard until pilsbot_description#6: the installed description
+    # still reads use_fake_hardware (default true: Gazebo).
+    assert seen['use_fake_hardware'] == 'false'
 
 
 def test_sensors_are_added_as_dynamic_joint_states_and_kept(converted):
