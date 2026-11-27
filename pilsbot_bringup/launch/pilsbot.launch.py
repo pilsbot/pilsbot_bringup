@@ -11,7 +11,7 @@ from launch_ros.substitutions import FindPackageShare
 def generate_launch_description():
     # Stack container (ADR 0003): driver, teleop, GNSS, lighting, foxglove_bridge.
     # The cameras run in the camera container: camera.launch.py.
-    withLights = LaunchConfiguration('withLights',   default=True)      # deactivate with withLights:=false
+    withLights = LaunchConfiguration('withLights', default='true')
     robot_profile = LaunchConfiguration('robot_profile', default='pilsbot')
     foxglove = LaunchConfiguration('foxglove', default='true')
     foxglove_port = LaunchConfiguration('foxglove_port', default='8765')
@@ -34,7 +34,8 @@ def generate_launch_description():
     declare_lighting_cmd = DeclareLaunchArgument(
         'withLights',
         default_value=withLights,
-        description='If set, STVO lighting is suppressed (on closed courses only! Führerscheinentzug!)')
+        description='Start the StVO lighting. withLights:=false only on closed courses '
+                    '(Führerscheinentzug!)')
 
     included_pilsbot_launch = IncludeLaunchDescription(
         PythonLaunchDescriptionSource([PathJoinSubstitution(
@@ -48,9 +49,8 @@ def generate_launch_description():
     )
 
     included_pilsbot_lighting = IncludeLaunchDescription(
-        PythonLaunchDescriptionSource([
-                PathJoinSubstitution([FindPackageShare('pilsbot_indicators'), 'launch/stvo.launch.py'])
-                ]),
+        PythonLaunchDescriptionSource([PathJoinSubstitution(
+            [FindPackageShare('pilsbot_indicators'), 'launch/stvo.launch.py'])]),
         launch_arguments={'robot_profile': robot_profile}.items(),
         condition=IfCondition(withLights),
     )
