@@ -33,6 +33,7 @@ if(BUILD_TESTING)
 
   find_package(ament_cmake_pytest REQUIRED)
   ament_add_pytest_test(test_log_kohl test/test_log_kohl.py)
+  ament_add_pytest_test(test_pilsbot_launch test/test_pilsbot_launch.py)
   ament_add_pytest_test(test_static_data_republisher test/test_static_data_republisher.py
     TIMEOUT 120)
 endif()
