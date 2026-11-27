@@ -105,3 +105,26 @@ def test_implausible_steering_angle_is_skipped():
     r = re_rooter_with((1.0, 0.2), (1.02, 9.7e189), (1.04, 0.21))
     odom, _ = r.re_root(front_odometry(1.04))
     assert odom.twist.twist.angular.z == approx(0.25)
+
+
+def test_steering_angles_with_the_same_stamp_have_no_rate():
+    # The C++ core only differences when now > last_steering_time_.
+    odom, _ = re_rooter_with((1.0, 0.2), (1.0, 0.21)).re_root(front_odometry(1.0))
+    assert odom.twist.twist.angular.z == approx(0.0)
+
+
+@pytest.mark.parametrize('t', [1.2, 5.0, 12.0])
+def test_steering_rate_is_zero_once_the_newest_angle_is_stale(t):
+    # 2023 bags with a broken Head MCU: a step, then no more angles. The rate
+    # of that step must not stick until the history is trimmed.
+    r = re_rooter_with((1.0, 0.2), (1.02, 0.3))
+    odom, _ = r.re_root(front_odometry(t, linear=0.0))
+    assert (odom.twist.twist.angular.z, odom.twist.twist.linear.y) == (approx(0.0), approx(0.0))
+    assert r.stale_steering == 1
+
+
+def test_steering_rate_of_a_fresh_angle_is_kept():
+    r = re_rooter_with((1.0, 0.2), (1.02, 0.3))
+    odom, _ = r.re_root(front_odometry(1.02 + 0.09))
+    assert odom.twist.twist.angular.z == approx(5.0)
+    assert r.stale_steering == 0

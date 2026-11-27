@@ -5,7 +5,11 @@ Foxy recorded odom_raw -> base_link with base_link at the front axle. The
 steering angle needed for the transform comes from /joint_states. Each
 odometry message uses the latest valid steering angle at its stamp; the
 steering rate comes from that angle and the valid one before it, as in the
-Humble controller.
+Humble controller (AckerDiffCore::update_rear_axle_centre): zero for equal
+stamps. Unlike the controller, which gets a fresh angle every cycle, a bag
+can stop carrying angles (broken Head MCU); once the newest angle is older
+than STALE_STEERING_NS the rate is zero, as it would be live for a reading
+that no longer changes.
 """
 import bisect
 import math
@@ -23,6 +27,10 @@ BASE_FRAME = 'base_footprint'
 # Steering angles older than this (relative to the newest odometry) are
 # dropped so a long bag doesn't keep its whole history in memory.
 _HISTORY_NS = 10 * 10**9
+
+# /joint_states comes at the 50 Hz control rate; five missing cycles mean
+# the steering angle stopped.
+STALE_STEERING_NS = 100 * 10**6
 
 
 def is_plausible_steering_angle(angle):
@@ -44,6 +52,8 @@ class OdometryReRooter:
         self._wheelbase = wheelbase
         self._stamps = []
         self._angles = []
+        # Odometry messages re-rooted with a stale steering angle (rate 0).
+        self.stale_steering = 0
 
     def add_steering_angle(self, stamp, angle):
         """Record a steering angle measured at stamp (ns); implausible ones are ignored."""
@@ -65,7 +75,9 @@ class OdometryReRooter:
             return None
         angle = self._angles[k]
         rate = 0.0
-        if k > 0:
+        if t - self._stamps[k] > STALE_STEERING_NS:
+            self.stale_steering += 1
+        elif k > 0 and self._stamps[k] > self._stamps[k - 1]:
             rate = (angle - self._angles[k - 1]) / ((self._stamps[k] - self._stamps[k - 1]) * 1e-9)
         self._forget_before(t - _HISTORY_NS)
 

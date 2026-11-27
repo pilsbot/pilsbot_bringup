@@ -8,12 +8,20 @@ Convert a Foxy-era Pilsbot bag (sqlite3) to the Humble frames, as MCAP.
   /tf gets odom -> base_footprint plus the moving joints from /joint_states.
 - /hoverboard_api and /head_mcu are also written as /dynamic_joint_states,
   ADR 0006. Everything else is copied unchanged.
+
+The output is written next to OUTPUT as OUTPUT.partial and renamed when
+complete; a failed run removes it.
+
+Reading a WAL-mode sqlite3 bag (as the Kohlfahrt bags are) creates -wal and -shm side
+files next to the input .db3, and sqlite may checkpoint the .db3 itself.
+Convert from a copy if the original must stay byte-identical.
 """
 import argparse
 from dataclasses import dataclass
 from dataclasses import field
 import math
 from pathlib import Path
+import shutil
 import sys
 
 from builtin_interfaces.msg import Time
@@ -52,6 +60,10 @@ class Report:
     wheelbase: float
     odometry_re_rooted: int = 0
     odometry_dropped: int = 0
+    # Odometry not in odom_raw: copied unchanged, so nothing reaches /tf.
+    odometry_not_re_rooted: dict = field(default_factory=dict)
+    # Re-rooted with a steering angle older than STALE_STEERING_NS (rate 0).
+    stale_steering_rate: int = 0
     replaced_messages: dict = field(default_factory=dict)
 
 
@@ -94,10 +106,38 @@ def current_urdf(profile):
     import xacro
     from ament_index_python.packages import get_package_share_directory
     path = get_package_share_directory('pilsbot_description') + '/urdf/pilsbot.urdf.xacro'
-    return xacro.process_file(path, mappings={'robot_profile': str(profile.path)}).toxml()
+    # The same arguments as pilsbot_driver's launch: the real hardware.
+    return xacro.process_file(path, mappings={
+        'robot_profile': str(profile.path),
+        'use_fake_hardware': 'false',
+        'controller_config': 'acker_diff_controller.yaml',
+    }).toxml()
 
 
 def convert(input_path, output_uri, profile_name='pilsbot'):
+    """
+    Convert input_path into a new MCAP bag directory output_uri.
+
+    The bag is written to output_uri.partial/ and only moved to output_uri
+    when complete, so an existing output_uri is always a finished one.
+    """
+    output = Path(output_uri)
+    if output.exists():
+        raise FileExistsError(f'{output} already exists')
+    partial = output.with_name(output.name + '.partial')
+    if partial.exists():
+        print(f'Removing {partial} left by an earlier, interrupted run', file=sys.stderr)
+        shutil.rmtree(partial)
+    partial.mkdir(parents=True)
+    try:
+        report = _convert(input_path, partial / output.name, profile_name)
+        (partial / output.name).rename(output)
+    finally:
+        shutil.rmtree(partial, ignore_errors=True)
+    return report
+
+
+def _convert(input_path, output_uri, profile_name):
     profile = robot_profile.load(profile_name)
     urdf = current_urdf(profile)
     joints = urdf_tf.joints(urdf)
@@ -127,6 +167,16 @@ def convert(input_path, output_uri, profile_name='pilsbot'):
     writer = rosbag2_py.SequentialWriter()
     writer.open(rosbag2_py.StorageOptions(uri=str(output_uri), storage_id='mcap'),
                 rosbag2_py.ConverterOptions('cdr', 'cdr'))
+    try:
+        _copy(reader, writer, topics, start_ns, urdf, joints, moving, re_rooter, report)
+    finally:
+        # Close before the caller renames or removes the directory, not in GC.
+        writer.close()
+    report.stale_steering_rate = re_rooter.stale_steering
+    return report
+
+
+def _copy(reader, writer, topics, start_ns, urdf, joints, moving, re_rooter, report):
     created = set()
 
     def write(topic, type_name, data, t, qos=''):
@@ -183,6 +233,8 @@ def convert(input_path, output_uri, profile_name='pilsbot'):
                 write('/tf', 'tf2_msgs/msg/TFMessage',
                       serialize_message(TFMessage(transforms=[tf])), t)
                 continue
+            report.odometry_not_re_rooted[topic] = (
+                report.odometry_not_re_rooted.get(topic, 0) + 1)
 
         write(topic, type_name, data, t)
 
@@ -207,12 +259,10 @@ def convert(input_path, output_uri, profile_name='pilsbot'):
             write('/dynamic_joint_states', 'control_msgs/msg/DynamicJointState',
                   serialize_message(head_mcu_to_dynamic_joint_state(head)), t)
 
-    writer.close()
-    return report
-
 
 def main(argv=None):
-    parser = argparse.ArgumentParser(description=__doc__.splitlines()[0])
+    parser = argparse.ArgumentParser(
+        description=__doc__.strip(), formatter_class=argparse.RawDescriptionHelpFormatter)
     parser.add_argument('input', help='Foxy bag directory or .mcap file')
     parser.add_argument('output', help='MCAP bag directory to create')
     parser.add_argument('--robot-profile', default='pilsbot',
@@ -221,7 +271,15 @@ def main(argv=None):
     report = convert(args.input, args.output, args.robot_profile)
     print(f'wheelbase {report.wheelbase} m; odometry re-rooted: {report.odometry_re_rooted}, '
           f'dropped (no steering angle yet): {report.odometry_dropped}; '
+          f'stale steering angle (rate 0): {report.stale_steering_rate}; '
           f'replaced: {report.replaced_messages}')
+    if report.odometry_not_re_rooted:
+        warning = (f'WARNING: odometry not in {LEGACY_ODOM_FRAME} was copied unchanged: '
+                   f'{report.odometry_not_re_rooted}.')
+        if not report.odometry_re_rooted:
+            warning += (' Nothing was re-rooted and the recorded /tf was dropped, '
+                        'so the output has no odom -> base_footprint.')
+        print(warning, file=sys.stderr)
     return 0
 
 
