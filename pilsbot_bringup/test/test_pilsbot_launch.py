@@ -80,6 +80,7 @@ def test_real_is_the_default_and_starts_driver_gnss_and_lighting():
     assert set(started) == {'pilsbot_driver', 'pilsbot_gnss_receiver', 'pilsbot_indicators'}
     assert started['pilsbot_driver']['hardware'] == 'real'
     assert started['pilsbot_driver']['use_sim_time'] == 'false'
+    assert started['pilsbot_driver']['cameras'] == 'true'
 
 
 def test_real_runs_foxglove_on_wall_time():
@@ -117,11 +118,19 @@ def test_gazebo_says_why_gnss_and_lighting_are_missing():
     assert 'GNSS' in message and 'lighting' in message
 
 
-def test_hardware_and_use_sim_time_reach_the_driver():
-    context, actions = expand(hardware='gazebo', use_sim_time='true', robot_profile='p')
+def test_hardware_use_sim_time_and_cameras_reach_the_driver():
+    context, actions = expand(
+        hardware='gazebo', use_sim_time='true', robot_profile='p', cameras='false')
 
     assert includes(context, actions)['pilsbot_driver'] == {
-        'robot_profile': 'p', 'hardware': 'gazebo', 'use_sim_time': 'true'}
+        'robot_profile': 'p', 'hardware': 'gazebo', 'use_sim_time': 'true',
+        'cameras': 'false'}
+
+
+def test_gazebo_renders_the_cameras_by_default():
+    context, actions = expand(hardware='gazebo', use_sim_time='true')
+
+    assert includes(context, actions)['pilsbot_driver']['cameras'] == 'true'
 
 
 @pytest.mark.parametrize('use_sim_time, expected', [('true', True), ('false', False)])
@@ -148,3 +157,9 @@ def test_an_unknown_hardware_fails_the_launch(value):
 def test_an_unknown_use_sim_time_fails_the_launch():
     with pytest.raises(RuntimeError, match='"use_sim_time"'):
         expand(use_sim_time='yes')
+
+
+@pytest.mark.parametrize('value', ['', 'off', 'False'])
+def test_an_unknown_cameras_fails_the_launch(value):
+    with pytest.raises(RuntimeError, match='"cameras"'):
+        expand(cameras=value)
