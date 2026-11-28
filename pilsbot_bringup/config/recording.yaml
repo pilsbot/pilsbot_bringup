@@ -47,7 +47,7 @@ groups:
 
   camera:
     # Transition (ADR 0003): the cameras run in the Foxy camera container, so
-    # these are the Foxy topic names. The OAK (pilsbot_depthai foxy-devel,
+    # the OAK topics are the Foxy names. The OAK (pilsbot_depthai foxy-devel,
     # rgb_stereo_node) publishes the color video and /stereo/depth as raw
     # Images via image_transport; the */compressed topics are JPEG from the
     # compressed plugin, encoded in the camera container on demand. Depth is
@@ -60,8 +60,11 @@ groups:
     #   - /camera/right/image_rect/compressed
     - /color/video/image/compressed
     - /color/video/camera_info
-    # CSI camera (jetson_camera master, sub-node camsub): Foxy resolves its
-    # topics to /image_raw and /camera_info. TODO: confirm the resolved names
-    # under Humble once the camera container moves there.
-    - /image_raw/compressed
-    - /camera_info
+    # CSI camera (jetson_camera, started by camera.launch.py): its topic_name
+    # parameter puts it on /front_camera/image_raw in front_camera_link, so
+    # the JPEG from the compressed plugin is /front_camera/image_raw/compressed.
+    # These are already the Humble names (spec pilsbot_vscode_ws#35): while
+    # the camera container still runs Foxy, its CSI camera publishes
+    # /image_raw/compressed and /camera_info, which are no longer recorded.
+    - /front_camera/image_raw/compressed
+    - /front_camera/camera_info
