@@ -11,6 +11,9 @@
 import importlib.util
 from pathlib import Path
 import re
+import shutil
+import subprocess
+import xml.etree.ElementTree as ET
 
 from ament_index_python.packages import get_package_share_directory
 from ament_index_python.packages import PackageNotFoundError
@@ -148,6 +151,15 @@ def recorded_camera_topics():
     return config['groups']['camera']
 
 
+def robot_links():
+    """Links of the real robot's URDF (pilsbot_description, hardware:=real)."""
+    urdf = Path(get_package_share_directory('pilsbot_description'), 'urdf', 'pilsbot.urdf.xacro')
+    result = subprocess.run([shutil.which('xacro'), str(urdf), 'hardware:=real'],
+                            capture_output=True, text=True, timeout=60)
+    assert result.returncode == 0, result.stderr
+    return {link.get('name') for link in ET.fromstring(result.stdout).findall('link')}
+
+
 def csi_request(requests):
     [request] = [r for r in requests if r.package_name == 'jetson_camera']
     return request
@@ -162,11 +174,20 @@ def test_csi_include_sets_the_front_camera_topic():
     assert global_params == {'topic_name': '/front_camera/image_raw'}
 
 
-def test_csi_include_gets_front_camera_link():
+def test_csi_include_gets_front_camera_optical_frame():
+    # An image is stamped with an optical frame (z forward, x right, y down;
+    # REP 103), not with the x-forward front_camera_link.
     includes, _, _ = expand()
 
     arguments, _ = csi_include(includes)
-    assert arguments == {'frame_id': 'front_camera_link'}
+    assert arguments == {'frame_id': 'front_camera_optical_frame'}
+
+
+def test_the_csi_frame_is_a_link_of_the_robot():
+    includes, _, _ = expand()
+
+    arguments, _ = csi_include(includes)
+    assert arguments['frame_id'] in robot_links()
 
 
 def test_recording_records_the_topics_the_csi_include_asks_for():
@@ -204,10 +225,11 @@ def test_csi_camera_publishes_under_front_camera():
 
 
 @needs_jetson_camera
-def test_csi_camera_frame_is_front_camera_link():
+def test_csi_camera_frame_is_front_camera_optical_frame():
     _, requests, _ = expand(follow_jetson_camera=True)
 
-    assert parameters(csi_request(requests))['frame_id'].string_value == 'front_camera_link'
+    frame = parameters(csi_request(requests))['frame_id'].string_value
+    assert frame == 'front_camera_optical_frame'
 
 
 @needs_jetson_camera
