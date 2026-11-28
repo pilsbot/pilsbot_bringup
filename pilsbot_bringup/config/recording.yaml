@@ -61,8 +61,8 @@ groups:
     - /color/video/image/compressed
     - /color/video/camera_info
     # CSI camera (jetson_camera, started by camera.launch.py): its topic_name
-    # parameter puts it on /front_camera/image_raw in front_camera_link, so
-    # the JPEG from the compressed plugin is /front_camera/image_raw/compressed.
+    # parameter puts it on /front_camera/image_raw in front_camera_optical_frame,
+    # so the JPEG from the compressed plugin is /front_camera/image_raw/compressed.
     # These are already the Humble names (spec pilsbot_vscode_ws#35): while
     # the camera container still runs Foxy, its CSI camera publishes
     # /image_raw/compressed and /camera_info, which are no longer recorded.
