@@ -109,6 +109,12 @@ def generate_launch_description():
         'use_sim_time', default_value='false', choices=['true', 'false'],
         description='Use /clock (true in simulation).')
 
+    declare_cameras_cmd = DeclareLaunchArgument(
+        'cameras', default_value='true', choices=['true', 'false'],
+        description='false leaves the Gazebo camera sensors out of the robot description '
+                    '(nothing is rendered, control tests run faster). No effect with '
+                    'hardware:=real.')
+
     declare_robot_profile_cmd = DeclareLaunchArgument(
         'robot_profile',
         default_value=robot_profile,
@@ -127,6 +133,7 @@ def generate_launch_description():
             'robot_profile': robot_profile,
             'hardware': LaunchConfiguration('hardware'),
             'use_sim_time': LaunchConfiguration('use_sim_time'),
+            'cameras': LaunchConfiguration('cameras'),
         }.items(),
     )
 
@@ -151,6 +158,7 @@ def generate_launch_description():
     ld = LaunchDescription()
     ld.add_action(declare_hardware_cmd)
     ld.add_action(declare_use_sim_time_cmd)
+    ld.add_action(declare_cameras_cmd)
     ld.add_action(declare_lighting_cmd)
     ld.add_action(declare_robot_profile_cmd)
     ld.add_action(declare_foxglove_cmd)
