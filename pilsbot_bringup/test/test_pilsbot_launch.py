@@ -127,7 +127,7 @@ def test_hardware_use_sim_time_and_cameras_reach_the_driver():
         'cameras': 'false'}
 
 
-def test_gazebo_renders_the_cameras_by_default():
+def test_gazebo_passes_cameras_true_to_the_driver_by_default():
     context, actions = expand(hardware='gazebo', use_sim_time='true')
 
     assert includes(context, actions)['pilsbot_driver']['cameras'] == 'true'
