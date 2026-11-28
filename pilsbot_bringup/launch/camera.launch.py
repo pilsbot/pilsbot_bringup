@@ -6,12 +6,15 @@ decoded on the Jetson only if enable_raw_decode:=true. Further mjpeg_node
 arguments (e.g. color_fps:=15) pass through.
 
 The CSI camera runs jetson_camera and publishes /front_camera/image_raw (with
-/compressed below it) and /front_camera/camera_info in front_camera_link. Its
-base topic is set with the node's topic_name parameter rather than a remap:
-image_transport derives camera_info and the transport topics from the base
-topic, while a remap of image_raw would leave image_raw/compressed (the topic
-that is recorded) under its old name. jetson_camera's launch file does not
-expose topic_name, so it is set with SetParameter in the CSI camera's scope.
+/compressed below it) and /front_camera/camera_info in
+front_camera_optical_frame: an image carries an optical frame (z forward,
+x right, y down; REP 103), not the x-forward front_camera_link it hangs
+from (pilsbot_description's URDF). Its base topic is set with the node's
+topic_name parameter rather than a remap: image_transport derives camera_info
+and the transport topics from the base topic, while a remap of image_raw would
+leave image_raw/compressed (the topic that is recorded) under its old name.
+jetson_camera's launch file does not expose topic_name, so it is set with
+SetParameter in the CSI camera's scope.
 """
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
@@ -25,7 +28,7 @@ from launch_ros.actions import SetParameter
 from launch_ros.substitutions import FindPackageShare
 
 CSI_TOPIC = '/front_camera/image_raw'
-CSI_FRAME = 'front_camera_link'
+CSI_FRAME = 'front_camera_optical_frame'
 
 
 def generate_launch_description():
