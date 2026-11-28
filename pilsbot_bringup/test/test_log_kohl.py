@@ -33,6 +33,15 @@ def test_all_groups_record_rosout_and_static_data():
         assert topic in cmd
 
 
+def test_camera_group_records_the_csi_camera_as_front_camera():
+    camera = yaml.safe_load((PACKAGE / 'config' / 'recording.yaml').read_text())[
+        'groups']['camera']
+    assert '/front_camera/image_raw/compressed' in camera
+    assert '/front_camera/camera_info' in camera
+    assert '/image_raw/compressed' not in camera
+    assert '/camera_info' not in camera
+
+
 def test_dir_without_marker_is_a_problem(tmp_path):
     problems = log_kohl.output_dir_problems(str(tmp_path), 0)
     assert problems == [f'no marker file {tmp_path}/.pilsbot_bags']

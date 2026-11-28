@@ -2,17 +2,30 @@
 Cameras, for the camera container on the Nano (ADR 0003).
 
 The OAK runs mjpeg_node (pilsbot_depthai): JPEG straight from the camera,
-decoded on the Jetson only if enable_raw_decode:=true. The CSI camera runs
-jetson_camera. Further mjpeg_node arguments (e.g. color_fps:=15) pass through.
+decoded on the Jetson only if enable_raw_decode:=true. Further mjpeg_node
+arguments (e.g. color_fps:=15) pass through.
+
+The CSI camera runs jetson_camera and publishes /front_camera/image_raw (with
+/compressed below it) and /front_camera/camera_info in front_camera_link. Its
+base topic is set with the node's topic_name parameter rather than a remap:
+image_transport derives camera_info and the transport topics from the base
+topic, while a remap of image_raw would leave image_raw/compressed (the topic
+that is recorded) under its old name. jetson_camera's launch file does not
+expose topic_name, so it is set with SetParameter in the CSI camera's scope.
 """
 from launch import LaunchDescription
 from launch.actions import DeclareLaunchArgument
+from launch.actions import GroupAction
 from launch.actions import IncludeLaunchDescription
 from launch.conditions import IfCondition
 from launch.launch_description_sources import PythonLaunchDescriptionSource
 from launch.substitutions import LaunchConfiguration
 from launch.substitutions import PathJoinSubstitution
+from launch_ros.actions import SetParameter
 from launch_ros.substitutions import FindPackageShare
+
+CSI_TOPIC = '/front_camera/image_raw'
+CSI_FRAME = 'front_camera_link'
 
 
 def generate_launch_description():
@@ -38,9 +51,15 @@ def generate_launch_description():
             launch_arguments={'nvdecoder': nvdecoder,
                               'enable_raw_decode': enable_raw_decode}.items(),
         ),
-        IncludeLaunchDescription(
-            PythonLaunchDescriptionSource(PathJoinSubstitution(
-                [FindPackageShare('jetson_camera'), 'launch', 'jetson_camera_launch.py'])),
+        GroupAction(
             condition=IfCondition(csi_camera),
-        ),
+            actions=[
+                SetParameter('topic_name', CSI_TOPIC),
+                IncludeLaunchDescription(
+                    PythonLaunchDescriptionSource(PathJoinSubstitution(
+                        [FindPackageShare('jetson_camera'), 'launch',
+                         'jetson_camera_launch.py'])),
+                    launch_arguments={'frame_id': CSI_FRAME}.items(),
+                ),
+            ]),
     ])
